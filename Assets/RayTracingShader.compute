@@ -1,0 +1,61 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it with cs.SetTexture
+RWTexture2D<float4> Result;
+
+//Define the matrices we pass to this shader.
+float4x4 _CameraToWorld;
+float4x4 _CameraInverseProjection;
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+};
+
+Ray CreateRay(float3 origin, float3 direction)
+{
+    Ray ray;
+    ray.origin = origin;
+    ray.direction = direction;
+    return ray;
+}
+
+//Get the camera origin in world space and the direction of the ray in world space. for each pixel.
+Ray CreateCameraRay(float2 uv)
+{
+    // Calculate the camera position in world space by multiplying the cameraToWorld matrix by a point. 
+    // The point is (0.0f, 0.0f, 0.0f, 1.0f) which represents the camera's position in its own local space.
+    float3 origin = mul(_CameraToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+    
+    // Convert a 2D point from normalized device coordinates (clip space) to a 3D direction vector in camera space.
+    float3 direction = mul(_CameraInverseProjection, float4(uv, 0.0f, 1.0f)).xyz;
+    
+    // Transform the direction from camera to world space and normalize
+    direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
+    direction = normalize(direction);
+    
+    return CreateRay(origin, direction);
+}
+
+//The number of threads each thread group will have. 
+//In this case 64 (8 * 8) threads running in parallel for each thread group
+//The number of thread groups is defined in the C# script.
+[numthreads(8, 8, 1)]
+//Each thread that runs in this shader gets a unique id that corresponds to its position in the thread group and dispatch grid.
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    // Get the dimensions of the RenderTexture
+    uint width, height;
+    Result.GetDimensions(width, height);
+    
+    // Transform pixel to [-1,1] range
+    float2 uv = float2((id.xy + float2(0.5f, 0.5f)) / float2(width, height) * 2.0f - 1.0f);
+    
+    // Get a ray for the UVs
+    Ray ray = CreateCameraRay(uv);
+    
+    // Write some colors
+    Result[id.xy] = float4(ray.direction * 0.5f + 0.5f, 1.0f);
+}
