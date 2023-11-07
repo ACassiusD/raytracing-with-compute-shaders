@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 public class RayTracingMaster : MonoBehaviour
 {
@@ -8,6 +9,7 @@ public class RayTracingMaster : MonoBehaviour
     public ComputeShader rayTracingComputeShader; //A reference to the compute shader we created.
     private RenderTexture renderTargetTexture; //Texture we will render to.
     private Camera camera;
+    public Texture SkyboxTexture;
 
     private void Awake()
     {
@@ -80,5 +82,7 @@ public class RayTracingMaster : MonoBehaviour
 
         // To figure out which direction rays should be cast in the 3d world space from a given pixel on the screen
         rayTracingComputeShader.SetMatrix("_CameraInverseProjection", camera.projectionMatrix.inverse);
+
+        rayTracingComputeShader.SetTexture(0, "_SkyboxTexture", SkyboxTexture);
     }
 }

@@ -8,6 +8,11 @@ RWTexture2D<float4> Result;
 float4x4 _CameraToWorld;
 float4x4 _CameraInverseProjection;
 
+Texture2D<float4> _SkyboxTexture;
+SamplerState sampler_SkyboxTexture;
+
+static const float PI = 3.14159265f;
+
 struct Ray
 {
     float3 origin;
@@ -39,23 +44,30 @@ Ray CreateCameraRay(float2 uv)
     return CreateRay(origin, direction);
 }
 
-//The number of threads each thread group will have. 
-//In this case 64 (8 * 8) threads running in parallel for each thread group
-//The number of thread groups is defined in the C# script.
+// Define the number of threads per thread group, which determines how many threads will run in parallel within a single group.
+// Here, we have 64 (8 in the x dimension times 8 in the y dimension) threads per group. 
+// The total number of thread groups is defined in the accompanying C# dispatch call.
 [numthreads(8, 8, 1)]
-//Each thread that runs in this shader gets a unique id that corresponds to its position in the thread group and dispatch grid.
-void CSMain(uint3 id : SV_DispatchThreadID)
+void CSMain(uint3 id : SV_DispatchThreadID) // The main compute shader function.
 {
-    // Get the dimensions of the RenderTexture
+    // The dimensions of the target RenderTexture are retrieved. 
+    // These dimensions dictate how many unique UV coordinates we will generate, one for each thread.
     uint width, height;
     Result.GetDimensions(width, height);
     
-    // Transform pixel to [-1,1] range
+    // Calculate the UV coordinates for the current thread.
+    // UV coordinates are normalized from [0, 1], but we shift them to [-1, 1] to map to our screen space.
     float2 uv = float2((id.xy + float2(0.5f, 0.5f)) / float2(width, height) * 2.0f - 1.0f);
     
-    // Get a ray for the UVs
+    // Generate a ray from the camera for the current UV coordinates.
     Ray ray = CreateCameraRay(uv);
     
-    // Write some colors
-    Result[id.xy] = float4(ray.direction * 0.5f + 0.5f, 1.0f);
+    // Instead of writing a solid color, we will now sample from a texture.
+    // We convert the ray's direction into spherical coordinates (theta, phi) for texture sampling.
+    // Theta is the angle from the top view vector (Y-axis), and Phi is the angle from the Z-axis in the XZ plane.
+    // We sample from the skybox texture using these spherical coordinates.
+    // The SampleLevel function samples the texture at a specific mipmap level, in this case, the top level (0).
+    float theta = acos(ray.direction.y) / -PI;
+    float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
+    Result[id.xy] = _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2(phi, theta), 0);
 }
